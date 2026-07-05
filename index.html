@@ -253,8 +253,11 @@
         
         let selectedStaffId = null;
         let selectedStaffName = '';
+        let selectedServiceId = null;
         let queueId = null;
         let statusTimer = null;
+        let staffList = [];
+        let serviceList = [];
 
         // Supabase API 请求
         async function supabaseRequest(table, options = {}) {

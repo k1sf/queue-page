@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>排队取号</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .shop-header {
+            text-align: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 20px;
+        }
+        .shop-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+        .shop-info {
+            font-size: 14px;
+            color: #666;
+            margin-top: 8px;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 16px;
+        }
+        .staff-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .staff-item {
+            display: flex;
+            align-items: center;
+            padding: 16px;
+            border: 2px solid #eee;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .staff-item:hover { border-color: #667eea; }
+        .staff-item.selected { border-color: #667eea; background: #f0f4ff; }
+        .staff-item.disabled { opacity: 0.5; cursor: not-allowed; }
+        .staff-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            margin-right: 12px;
+        }
+        .staff-info { flex: 1; }
+        .staff-name { font-size: 16px; font-weight: 600; color: #333; }
+        .staff-wait { font-size: 13px; color: #666; margin-top: 4px; }
+        .staff-status {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+        .status-online { background: #e8f5e9; color: #2e7d32; }
+        .status-offline { background: #fce4ec; color: #c2185b; }
+        .join-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s;
+        }
+        .join-btn:active { transform: scale(0.98); }
+        .join-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .loading { text-align: center; padding: 40px; color: #666; }
+        .error { text-align: center; padding: 40px; color: #e53935; }
+        
+        /* 排队表单 */
+        .join-form {
+            display: none;
+            margin-top: 20px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 12px;
+        }
+        .form-group {
+            margin-bottom: 12px;
+        }
+        .form-label {
+            display: block;
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 6px;
+        }
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 15px;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        /* 排队状态页面 */
+        .queue-status { display: none; text-align: center; }
+        .queue-number {
+            font-size: 48px;
+            font-weight: bold;
+            color: #667eea;
+            margin: 20px 0;
+        }
+        .queue-info {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .queue-info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .queue-info-item:last-child { border-bottom: none; }
+        .queue-info-label { color: #666; }
+        .queue-info-value { font-weight: 600; color: #333; }
+        .cancel-btn {
+            width: 100%;
+            padding: 14px;
+            background: #fff;
+            color: #e53935;
+            border: 2px solid #e53935;
+            border-radius: 12px;
+            font-size: 15px;
+            cursor: pointer;
+            margin-top: 16px;
+        }
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: #4caf50;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 40px;
+            color: white;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+        .status-waiting { background: #fff3e0; color: #e65100; }
+        .status-calling { background: #e8f5e9; color: #2e7d32; }
+        .status-completed { background: #e3f2fd; color: #1565c0; }
+        .status-cancelled { background: #fce4ec; color: #c2185b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 选择员工页面 -->
+        <div id="selectPage">
+            <div class="shop-header">
+                <div class="shop-name" id="shopName">加载中...</div>
+                <div class="shop-info" id="shopInfo"></div>
+            </div>
+            
+            <div class="section-title">请选择服务员工</div>
+            <div class="staff-list" id="staffList">
+                <div class="loading">加载中...</div>
+            </div>
+            
+            <!-- 排队表单 -->
+            <div class="join-form" id="joinForm">
+                <div class="form-group">
+                    <label class="form-label">您的姓名 *</label>
+                    <input type="text" class="form-input" id="customerName" placeholder="请输入姓名">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">手机号码（选填）</label>
+                    <input type="tel" class="form-input" id="customerPhone" placeholder="请输入手机号">
+                </div>
+            </div>
+            
+            <button class="join-btn" id="joinBtn" disabled onclick="showJoinForm()">
+                请先选择员工
+            </button>
+        </div>
+        
+        <!-- 排队状态页面 -->
+        <div id="statusPage" class="queue-status">
+            <div class="success-icon">✓</div>
+            <div class="section-title">排队成功</div>
+            <div class="queue-number" id="queueNumber">--</div>
+            <div class="status-badge status-waiting" id="statusBadge">等待中</div>
+            
+            <div class="queue-info">
+                <div class="queue-info-item">
+                    <span class="queue-info-label">服务员工</span>
+                    <span class="queue-info-value" id="staffName">--</span>
+                </div>
+                <div class="queue-info-item">
+                    <span class="queue-info-label">前方等待</span>
+                    <span class="queue-info-value" id="waitingCount">--</span>
+                </div>
+                <div class="queue-info-item">
+                    <span class="queue-info-label">预计等待</span>
+                    <span class="queue-info-value" id="estimatedWait">--</span>
+                </div>
+            </div>
+            
+            <button class="cancel-btn" onclick="cancelQueue()">取消排队</button>
+        </div>
+    </div>
+
+    <script>
+        // Supabase 配置
+        const SUPABASE_URL = 'https://hbndokkttmzgztdfnmtn.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_-IQwOFl7bOjPtPbmWSbiaA_I-BUw7by';
+        
+        let selectedStaffId = null;
+        let selectedStaffName = '';
+        let queueId = null;
+        let statusTimer = null;
+
+        // Supabase API 请求
+        async function supabaseRequest(table, options = {}) {
+            const url = `${SUPABASE_URL}/rest/v1/${table}${options.query || ''}`;
+            const res = await fetch(url, {
+                method: options.method || 'GET',
+                headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': `Bearer ${SUPABASE_KEY}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': options.prefer || ''
+                },
+                body: options.body ? JSON.stringify(options.body) : undefined
+            });
+            return res;
+        }
+
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadShopInfo();
+            loadStaffList();
+        });
+
+        // 加载门店信息
+        async function loadShopInfo() {
+            try {
+                const res = await supabaseRequest('shops?select=*&limit=1');
+                const shops = await res.json();
+                
+                if (shops.length > 0) {
+                    const shop = shops[0];
+                    document.getElementById('shopName').textContent = shop.name || '足部护理';
+                    document.getElementById('shopInfo').textContent = shop.address || '';
+                } else {
+                    document.getElementById('shopName').textContent = '足部护理';
+                }
+                
+                // 获取当前排队人数
+                const queueRes = await supabaseRequest('queue_records?select=*&status=eq.waiting');
+                const queue = await queueRes.json();
+                document.getElementById('shopInfo').textContent = '当前排队：' + queue.length + '人';
+            } catch (e) {
+                console.error('Failed to load shop info:', e);
+                document.getElementById('shopName').textContent = '足部护理';
+            }
+        }
+
+        // 加载员工列表
+        async function loadStaffList() {
+            try {
+                const res = await supabaseRequest('staff?select=*&is_available=eq.true&order=created_at');
+                const staffList = await res.json();
+                const container = document.getElementById('staffList');
+                
+                if (staffList.length === 0) {
+                    container.innerHTML = '<div class="loading">暂无可用员工</div>';
+                    return;
+                }
+                
+                // 获取每个员工的等待人数
+                const queueRes = await supabaseRequest('queue_records?select=*&status=eq.waiting');
+                const queueList = await queueRes.json();
+                
+                let html = '';
+                for (const staff of staffList) {
+                    const staffQueueCount = queueList.filter(q => q.staff_id === staff.id).length;
+                    const waitMinutes = staffQueueCount * (staff.avg_service_minutes || 30);
+                    const statusClass = 'status-online';
+                    const statusText = '可接单';
+                    
+                    html += '<div class="staff-item" ' +
+                            'onclick="selectStaff(' + staff.id + ', \'' + staff.name.replace(/'/g, "\\'") + '\')" ' +
+                            'data-staff-id="' + staff.id + '">' +
+                            '<div class="staff-avatar">' + staff.name.charAt(0) + '</div>' +
+                            '<div class="staff-info">' +
+                            '<div class="staff-name">' + staff.name + '</div>' +
+                            '<div class="staff-wait">前方等待：' + staffQueueCount + '人 | 约' + waitMinutes + '分钟</div>' +
+                            '</div>' +
+                            '<span class="staff-status ' + statusClass + '">' + statusText + '</span>' +
+                            '</div>';
+                }
+                container.innerHTML = html;
+            } catch (e) {
+                console.error('Load staff error:', e);
+                document.getElementById('staffList').innerHTML = '<div class="error">加载失败，请刷新重试</div>';
+            }
+        }
+
+        // 选择员工
+        function selectStaff(staffId, staffName) {
+            selectedStaffId = staffId;
+            selectedStaffName = staffName;
+            document.querySelectorAll('.staff-item').forEach(el => el.classList.remove('selected'));
+            document.querySelector('[data-staff-id="' + staffId + '"]').classList.add('selected');
+            document.getElementById('joinBtn').disabled = false;
+            document.getElementById('joinBtn').textContent = '向 ' + staffName + ' 排队取号';
+        }
+
+        // 显示排队表单
+        function showJoinForm() {
+            document.getElementById('joinForm').style.display = 'block';
+            document.getElementById('joinBtn').textContent = '确认排队';
+            document.getElementById('joinBtn').onclick = joinQueue;
+        }
+
+        // 加入排队
+        async function joinQueue() {
+            if (!selectedStaffId) return;
+            
+            const customerName = document.getElementById('customerName').value.trim();
+            const customerPhone = document.getElementById('customerPhone').value.trim();
+            
+            if (!customerName) {
+                alert('请输入您的姓名');
+                return;
+            }
+            
+            const btn = document.getElementById('joinBtn');
+            btn.disabled = true;
+            btn.textContent = '正在排队...';
+            
+            try {
+                // 获取当前最大排队号
+                const maxNumRes = await supabaseRequest('queue_records?select=queue_number&order=queue_number.desc&limit=1');
+                const maxNumData = await maxNumRes.json();
+                const nextQueueNumber = (maxNumData.length > 0 ? maxNumData[0].queue_number : 0) + 1;
+                
+                // 获取前方等待人数
+                const waitingRes = await supabaseRequest('queue_records?select=*&staff_id=eq.' + selectedStaffId + '&status=eq.waiting');
+                const waitingList = await waitingRes.json();
+                const peopleAhead = waitingList.length;
+                
+                // 插入排队记录
+                const insertRes = await supabaseRequest('queue_records', {
+                    method: 'POST',
+                    prefer: 'return=representation',
+                    body: {
+                        customer_name: customerName,
+                        customer_phone: customerPhone || null,
+                        staff_id: selectedStaffId,
+                        queue_number: nextQueueNumber,
+                        status: 'waiting',
+                        join_time: new Date().toISOString(),
+                        estimated_wait_minutes: peopleAhead * 30,
+                        notes: null
+                    }
+                });
+                
+                const result = await insertRes.json();
+                
+                if (result.length > 0) {
+                    queueId = result[0].id;
+                    showQueueStatus({
+                        queueNumber: 'A' + String(nextQueueNumber).padStart(3, '0'),
+                        peopleAhead: peopleAhead,
+                        estimatedWaitMinutes: peopleAhead * 30
+                    });
+                    startStatusPolling();
+                } else {
+                    alert('排队失败');
+                    btn.disabled = false;
+                    btn.textContent = '确认排队';
+                }
+            } catch (e) {
+                console.error('Join queue error:', e);
+                alert('网络错误，请重试');
+                btn.disabled = false;
+                btn.textContent = '确认排队';
+            }
+        }
+
+        // 显示排队状态
+        function showQueueStatus(data) {
+            document.getElementById('selectPage').style.display = 'none';
+            document.getElementById('statusPage').style.display = 'block';
+            document.getElementById('queueNumber').textContent = data.queueNumber;
+            document.getElementById('staffName').textContent = selectedStaffName;
+            document.getElementById('waitingCount').textContent = data.peopleAhead + '人';
+            document.getElementById('estimatedWait').textContent = '约' + data.estimatedWaitMinutes + '分钟';
+        }
+
+        // 轮询排队状态
+        function startStatusPolling() {
+            if (statusTimer) clearInterval(statusTimer);
+            statusTimer = setInterval(async function() {
+                if (!queueId) return;
+                
+                try {
+                    const res = await supabaseRequest('queue_records?id=eq.' + queueId + '&select=*');
+                    const dataList = await res.json();
+                    
+                    if (dataList.length === 0) return;
+                    const data = dataList[0];
+                    
+                    // 获取前方等待人数
+                    const waitingRes = await supabaseRequest('queue_records?select=*&staff_id=eq.' + data.staff_id + '&status=eq.waiting&queue_number=lt.' + data.queue_number);
+                    const waitingList = await waitingRes.json();
+                    const peopleAhead = waitingList.length;
+                    
+                    document.getElementById('waitingCount').textContent = peopleAhead + '人';
+                    document.getElementById('estimatedWait').textContent = '约' + (peopleAhead * 30) + '分钟';
+                    
+                    // 更新状态徽章
+                    const badge = document.getElementById('statusBadge');
+                    switch(data.status) {
+                        case 'waiting':
+                            badge.textContent = '等待中';
+                            badge.className = 'status-badge status-waiting';
+                            break;
+                        case 'calling':
+                            badge.textContent = '叫号中，请准备';
+                            badge.className = 'status-badge status-calling';
+                            break;
+                        case 'completed':
+                            badge.textContent = '服务完成';
+                            badge.className = 'status-badge status-completed';
+                            clearInterval(statusTimer);
+                            break;
+                        case 'cancelled':
+                            badge.textContent = '已取消';
+                            badge.className = 'status-badge status-cancelled';
+                            clearInterval(statusTimer);
+                            break;
+                    }
+                    
+                    if (data.status === 'calling') {
+                        if (!window.notified) {
+                            window.notified = true;
+                            alert('轮到您了，请前往服务台！');
+                        }
+                    }
+                } catch (e) {
+                    console.error('Status poll error:', e);
+                }
+            }, 5000);
+        }
+
+        // 取消排队
+        async function cancelQueue() {
+            if (!confirm('确定要取消排队吗？')) return;
+            
+            try {
+                await supabaseRequest('queue_records?id=eq.' + queueId, {
+                    method: 'PATCH',
+                    body: { status: 'cancelled' }
+                });
+                clearInterval(statusTimer);
+                location.reload();
+            } catch (e) {
+                alert('取消失败，请重试');
+            }
+        }
+    </script>
+</body>
+</html>

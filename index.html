@@ -387,6 +387,17 @@
                 const waitingList = await waitingRes.json();
                 const peopleAhead = waitingList.length;
                 
+                // 获取选中的员工信息
+                const selectedStaff = staffList.find(s => s.id === selectedStaffId);
+                const staffName = selectedStaff ? selectedStaff.name : '';
+                
+                // 获取选中的服务信息（如果有）
+                let serviceName = '';
+                if (selectedServiceId) {
+                    const selectedService = serviceList.find(s => s.id === selectedServiceId);
+                    serviceName = selectedService ? selectedService.name : '';
+                }
+                
                 // 插入排队记录
                 const insertRes = await supabaseRequest('queue_records', {
                     method: 'POST',
@@ -396,7 +407,10 @@
                         customer_name: customerName,
                         customer_phone: customerPhone || null,
                         staff_id: selectedStaffId,
-                        queue_number: nextQueueNumber,
+                        staff_name: staffName,
+                        service_id: selectedServiceId || 0,
+                        service_name: serviceName,
+                        queue_number: parseInt(nextQueueNumber),
                         status: 'waiting',
                         join_time: new Date().toISOString(),
                         estimated_wait_minutes: peopleAhead * 30,
@@ -455,8 +469,19 @@
                     const waitingList = await waitingRes.json();
                     const peopleAhead = waitingList.length;
                     
+                    // 更新显示
                     document.getElementById('waitingCount').textContent = peopleAhead + '人';
                     document.getElementById('estimatedWait').textContent = '约' + (peopleAhead * 30) + '分钟';
+                    
+                    // 更新技师和服务信息（如果有）
+                    if (data.staff_name) {
+                        const staffInfoEl = document.getElementById('staffInfo');
+                        if (staffInfoEl) staffInfoEl.textContent = '技师：' + data.staff_name;
+                    }
+                    if (data.service_name) {
+                        const serviceInfoEl = document.getElementById('serviceInfo');
+                        if (serviceInfoEl) serviceInfoEl.textContent = '服务：' + data.service_name;
+                    }
                     
                     // 更新状态徽章
                     const badge = document.getElementById('statusBadge');

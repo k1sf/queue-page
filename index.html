@@ -238,6 +238,10 @@
                     <span class="queue-info-label">服务员工</span>
                     <span class="queue-info-value" id="staffName">--</span>
                 </div>
+                <div class="queue-info-item" id="serviceInfoItem" style="display:none;">
+                    <span class="queue-info-label">服务项目</span>
+                    <span class="queue-info-value" id="serviceName">--</span>
+                </div>
                 <div class="queue-info-item">
                     <span class="queue-info-label">前方等待</span>
                     <span class="queue-info-value" id="waitingCount">--</span>
@@ -502,6 +506,12 @@
             document.getElementById('staffName').textContent = selectedStaffName;
             document.getElementById('waitingCount').textContent = data.peopleAhead + '人';
             document.getElementById('estimatedWait').textContent = '约' + data.estimatedWaitMinutes + '分钟';
+            
+            // 显示服务项目（如果有）
+            if (data.service_name) {
+                document.getElementById('serviceInfoItem').style.display = 'flex';
+                document.getElementById('serviceName').textContent = data.service_name;
+            }
         }
 
         // 轮询排队状态
@@ -528,12 +538,11 @@
                     
                     // 更新技师和服务信息（如果有）
                     if (data.staff_name) {
-                        const staffInfoEl = document.getElementById('staffInfo');
-                        if (staffInfoEl) staffInfoEl.textContent = '技师：' + data.staff_name;
+                        document.getElementById('staffName').textContent = data.staff_name;
                     }
                     if (data.service_name) {
-                        const serviceInfoEl = document.getElementById('serviceInfo');
-                        if (serviceInfoEl) serviceInfoEl.textContent = '服务：' + data.service_name;
+                        document.getElementById('serviceInfoItem').style.display = 'flex';
+                        document.getElementById('serviceName').textContent = data.service_name;
                     }
                     
                     // 更新状态徽章
@@ -589,3 +598,4 @@
     </script>
 </body>
 </html>
+

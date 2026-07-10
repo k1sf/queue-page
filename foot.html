@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>足部护理 · 在线取号</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;
+       background:#F7F6F2;min-height:100vh;display:flex;flex-direction:column;align-items:center}
+  .header{background:#2E7D32;width:100%;padding:20px 16px 16px;text-align:center;color:#fff}
+  .header h1{font-size:22px;font-weight:700;letter-spacing:1px}
+  .header p{font-size:13px;margin-top:4px;opacity:.85}
+  .card{background:#fff;border-radius:16px;padding:20px;margin:16px;width:calc(100% - 32px);
+        max-width:420px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+  .card h2{font-size:15px;color:#2C2C2C;font-weight:600;margin-bottom:14px;
+            padding-bottom:10px;border-bottom:1px solid #F0F0F0}
+  .option-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .option-btn{padding:12px 8px;border:2px solid #E0E0E0;border-radius:12px;
+               background:#fff;font-size:14px;color:#2C2C2C;cursor:pointer;
+               text-align:center;transition:all .15s;width:100%}
+  .option-btn:active{background:#E8F5E9;border-color:#2E7D32}
+  .option-btn.selected{background:#E8F5E9;border-color:#2E7D32;color:#2E7D32;font-weight:600}
+  .option-btn .sub{font-size:11px;color:#757575;margin-top:3px}
+  .option-btn.selected .sub{color:#2E7D32}
+  input[type=text]{width:100%;padding:12px 14px;border:1.5px solid #E0E0E0;border-radius:10px;
+                   font-size:15px;outline:none;background:#FAFAFA}
+  input[type=text]:focus{border-color:#2E7D32;background:#fff}
+  .join-btn{width:100%;padding:15px;background:#2E7D32;color:#fff;border:none;border-radius:14px;
+            font-size:17px;font-weight:700;cursor:pointer;margin-top:6px;letter-spacing:1px}
+  .join-btn:active{background:#1B5E20}
+  .join-btn:disabled{background:#A5D6A7;cursor:default}
+  .result{text-align:center;padding:20px 0}
+  .num-badge{background:linear-gradient(135deg,#2E7D32,#43A047);border-radius:20px;
+              display:inline-block;padding:10px 36px;margin:12px 0}
+  .num-badge .num{font-size:64px;font-weight:900;color:#fff;line-height:1}
+  .num-badge .prefix{font-size:18px;color:rgba(255,255,255,.8);font-weight:600}
+  .result-info{font-size:14px;color:#757575;line-height:1.8}
+  .result-info strong{color:#2C2C2C}
+  .new-btn{width:100%;padding:13px;background:#F5F5F5;color:#2C2C2C;border:none;
+            border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;margin-top:16px}
+  .loading{color:#9E9E9E;font-size:13px;text-align:center;padding:12px 0}
+  .hint{font-size:12px;color:#BDBDBD;text-align:center;padding:8px 0 20px}
+  .err-msg{color:#E53935;font-size:13px;text-align:center;padding:8px 16px;
+            background:#FFF3F3;border-radius:8px;margin:8px 16px}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🌿 在线取号</h1>
+  <p>请选择技师和服务，即可取号排队</p>
+</div>
+
+<div id="app"><div class="loading" style="padding:40px">加载中...</div></div>
+
+<script>
+// ===== Supabase 配置（直接写入，无需服务端）=====
+const SUPABASE_URL = 'https://backend.appmiaoda.com/projects/supabase333620875167318016';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoyMDk4OTY4NjE1LCJpc3MiOiJzdXBhYmFzZSIsInJvbGUiOiJhbm9uIiwic3ViIjoiYW5vbiJ9.O-jiMsLj2HNMxUQHY5tEKuQejBeif3sedmVZCsR8r6o';
+
+// ===== Supabase REST 请求封装 =====
+async function sbGet(table, query = '') {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${query}`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' }
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function sbPost(table, body) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation'
+    },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+// ===== 状态 =====
+let staffList = [], serviceList = [];
+let selStaff = null, selService = null;
+
+// ===== 初始化 =====
+async function init() {
+  try {
+    const [s, v] = await Promise.all([
+      sbGet('staff', '?select=id,name,level&status=eq.active&order=name'),
+      sbGet('services', '?select=id,name,price,duration&status=eq.active&order=name'),
+    ]);
+    staffList = s || [];
+    serviceList = v || [];
+  } catch (e) {
+    showError('数据加载失败，请刷新页面重试');
+    return;
+  }
+  renderForm();
+}
+
+function levelLabel(l) {
+  return { expert: '高级技师', senior: '资深技师', mid: '中级技师', junior: '初级技师' }[l] || l;
+}
+
+function showError(msg) {
+  const el = document.getElementById('err-banner');
+  if (el) { el.textContent = msg; el.style.display = 'block'; }
+}
+
+// ===== 渲染表单 =====
+function renderForm() {
+  document.getElementById('app').innerHTML = `
+    <div class="card">
+      <h2>👤 选择技师（可选）</h2>
+      <div class="option-grid" id="staff-grid"></div>
+    </div>
+    <div class="card">
+      <h2>💆 选择服务（可选）</h2>
+      <div class="option-grid" id="svc-grid"></div>
+    </div>
+    <div class="card">
+      <h2>📝 您的姓名（可选）</h2>
+      <input type="text" id="cname" placeholder="方便技师称呼您" maxlength="20">
+    </div>
+    <div id="err-banner" class="err-msg" style="display:none"></div>
+    <div style="margin:0 16px 32px">
+      <button class="join-btn" id="joinBtn" onclick="join()">立即取号排队</button>
+      <p class="hint">取号后请在店内等候叫号</p>
+    </div>
+  `;
+  buildGrids();
+}
+
+function buildGrids() {
+  const sg = document.getElementById('staff-grid');
+  const vg = document.getElementById('svc-grid');
+  if (!sg || !vg) return;
+
+  sg.innerHTML =
+    btn(null, selStaff, '随机安排', '', 'pickStaff') +
+    staffList.map(s => btn(s.id, selStaff, s.name, levelLabel(s.level), 'pickStaff')).join('');
+
+  vg.innerHTML =
+    btn(null, selService, '待定', '', 'pickSvc') +
+    serviceList.map(s => btn(s.id, selService, s.name, `¥${s.price} · ${s.duration}分钟`, 'pickSvc')).join('');
+}
+
+function btn(id, sel, label, sub, fn) {
+  const sel_ = (id === sel) ? 'selected' : '';
+  const idStr = id ? `'${id}'` : 'null';
+  return `<button class="option-btn ${sel_}" onclick="${fn}(${idStr})">
+    <span>${label}</span>${sub ? `<div class="sub">${sub}</div>` : ''}
+  </button>`;
+}
+
+function pickStaff(id) { selStaff = id; buildGrids(); }
+function pickSvc(id)   { selService = id; buildGrids(); }
+
+// ===== 取号 =====
+async function join() {
+  const btnEl = document.getElementById('joinBtn');
+  const errEl = document.getElementById('err-banner');
+  const name = (document.getElementById('cname').value || '').trim();
+
+  btnEl.disabled = true;
+  btnEl.textContent = '取号中...';
+  if (errEl) errEl.style.display = 'none';
+
+  try {
+    // 计算今日最大号码
+    const today = new Date().toISOString().slice(0, 10);
+    const maxRes = await sbGet('queue_records',
+      `?select=queue_number&created_at=gte.${today}T00:00:00.000Z&created_at=lte.${today}T23:59:59.999Z&order=queue_number.desc&limit=1`
+    );
+    const nextNum = (maxRes && maxRes.length > 0) ? maxRes[0].queue_number + 1 : 1;
+
+    const inserted = await sbPost('queue_records', {
+      queue_number: nextNum,
+      customer_name: name || null,
+      staff_id: selStaff || null,
+      service_id: selService || null,
+      status: 'waiting',
+      extra_minutes: 0,
+    });
+
+    if (!inserted || inserted.length === 0) throw new Error('取号失败，请重试');
+
+    const staffName   = selStaff   ? (staffList.find(s => s.id === selStaff) || {}).name   : null;
+    const serviceName = selService ? (serviceList.find(s => s.id === selService) || {}).name : null;
+    renderResult(nextNum, staffName, serviceName, name);
+
+  } catch (e) {
+    if (errEl) { errEl.textContent = '取号失败：' + (e.message || '网络错误，请重试'); errEl.style.display = 'block'; }
+    btnEl.disabled = false;
+    btnEl.textContent = '立即取号排队';
+  }
+}
+
+// ===== 结果页 =====
+function renderResult(num, staffName, serviceName, customerName) {
+  document.getElementById('app').innerHTML = `
+    <div class="card" style="margin-top:32px">
+      <div class="result">
+        <p style="font-size:15px;color:#757575;margin-bottom:8px">您的排队号码</p>
+        <div class="num-badge">
+          <div class="prefix">A</div>
+          <div class="num">${String(num).padStart(3, '0')}</div>
+        </div>
+        <div class="result-info">
+          ${staffName   ? `<p>技师：<strong>${staffName}</strong></p>` : ''}
+          ${serviceName ? `<p>服务：<strong>${serviceName}</strong></p>` : ''}
+          ${customerName ? `<p>姓名：<strong>${customerName}</strong></p>` : ''}
+          <p style="margin-top:12px;color:#2E7D32;font-weight:600">✅ 取号成功！请在店内等候叫号</p>
+        </div>
+        <button class="new-btn" onclick="reset()">重新取号</button>
+      </div>
+    </div>
+  `;
+}
+
+function reset() {
+  selStaff = null;
+  selService = null;
+  renderForm();
+}
+
+init();
+</script>
+</body>
+</html>
